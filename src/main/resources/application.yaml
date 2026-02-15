@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: Tasks
+  mongodb:
+    uri: mongodb://admin:password@localhost:27017/tasks?authSource=admin&uuidRepresentation=standard
