@@ -19,7 +19,7 @@ import java.util.UUID;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
-final class TasksControllerIntegrationTest {
+final class TasksControllerIT {
 
     @Autowired
     private WebTestClient webTestClient;
