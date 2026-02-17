@@ -1,6 +1,7 @@
 package com.seba.tasks.service;
 
 import com.seba.tasks.dto.TaskDto;
+import com.seba.tasks.error.exceptions.TaskBlockedException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
 import com.seba.tasks.model.TaskStatus;
@@ -191,6 +192,37 @@ class TaskServiceImplTest {
                 .verify();
 
         verify(taskRepository, never()).deleteByTaskId(any());
+    }
+
+    @Test
+    void update_blockedTask_statusChange_throwsTaskBlockedException() {
+        UUID taskId = UUID.randomUUID();
+        Task existing = buildTestTask(taskId, "Blocked task");
+        existing.setStatus(TaskStatus.BLOCKED);
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(existing));
+
+        StepVerifier.create(taskService.update(taskId, null, TaskStatus.IN_PROGRESS, "seba"))
+                .expectError(TaskBlockedException.class)
+                .verify();
+
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void update_blockedTask_titleChangeOnly_succeeds() {
+        UUID taskId = UUID.randomUUID();
+        Task existing = buildTestTask(taskId, "Blocked task");
+        existing.setStatus(TaskStatus.BLOCKED);
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(existing));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(taskService.update(taskId, "New title", null, "seba"))
+                .expectNextMatches(dto ->
+                        dto.title().equals("New title")
+                                && dto.status() == TaskStatus.BLOCKED)
+                .verifyComplete();
     }
 
     // --- helper ---

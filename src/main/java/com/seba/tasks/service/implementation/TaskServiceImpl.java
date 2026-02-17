@@ -1,6 +1,7 @@
 package com.seba.tasks.service.implementation;
 
 import com.seba.tasks.dto.TaskDto;
+import com.seba.tasks.error.exceptions.TaskBlockedException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
 import com.seba.tasks.model.TaskStatus;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.UUID;
 
+import static com.seba.tasks.error.ErrorCode.TASK_BLOCKED;
 import static com.seba.tasks.error.ErrorCode.TASK_NOT_FOUND;
 
 @Service
@@ -47,6 +49,9 @@ public final class TaskServiceImpl implements TaskService {
         return taskRepository.findByTaskId(taskId)
                 .switchIfEmpty(Mono.error(new TaskNotFoundException(TASK_NOT_FOUND, taskId)))
                 .flatMap(task -> {
+                    if (task.getStatus() == TaskStatus.BLOCKED && status != null)
+                        return Mono.error(new TaskBlockedException(TASK_BLOCKED, taskId));
+
                     if (title != null) task.setTitle(title);
                     if (status != null) task.setStatus(status);
                     task.setUpdatedAt(Instant.now());
