@@ -2,6 +2,7 @@ package com.seba.tasks.service.implementation;
 
 import com.seba.tasks.dto.TaskDto;
 import com.seba.tasks.error.exceptions.CircularDependencyException;
+import com.seba.tasks.error.exceptions.DependencyNotFoundException;
 import com.seba.tasks.error.exceptions.InvalidArgumentException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
@@ -62,7 +63,21 @@ public class DependencyServiceImpl implements DependencyService {
 
     @Override
     public Mono<TaskDto> removeDependency(UUID taskId, UUID blockerTaskId) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return taskRepository.findByTaskId(taskId)
+                .switchIfEmpty(Mono.error(new TaskNotFoundException(TASK_NOT_FOUND, taskId)))
+                .flatMap(task -> {
+                    if (!task.getDependsOn().contains(blockerTaskId)) {
+                        return Mono.error(new DependencyNotFoundException(DEPENDENCY_NOT_FOUND, taskId, blockerTaskId));
+                    }
+
+                    List<UUID> updatedDeps = new ArrayList<>(task.getDependsOn());
+                    updatedDeps.remove(blockerTaskId);
+                    task.setDependsOn(updatedDeps);
+
+                    return recalculateStatus(task)
+                            .flatMap(taskRepository::save)
+                            .map(TaskUtility::toTaskDto);
+                });
     }
 
     private Mono<Void> detectCycle(UUID taskId, UUID blockerTaskId) {
@@ -83,6 +98,21 @@ public class DependencyServiceImpl implements DependencyService {
                     return Flux.fromIterable(task.getDependsOn())
                             .flatMap(depId -> walkDependencies(depId, targetId, visited))
                             .then();
+                });
+    }
+
+    private Mono<Task> recalculateStatus(Task task) {
+        if (task.getDependsOn().isEmpty()) {
+            task.setStatus(TaskStatus.TODO);
+            return Mono.just(task);
+        }
+
+        return Flux.fromIterable(task.getDependsOn())
+                .flatMap(taskRepository::findByTaskId)
+                .all(blocker -> blocker.getStatus() == TaskStatus.DONE)
+                .map(allDone -> {
+                    task.setStatus(allDone ? TaskStatus.TODO : TaskStatus.BLOCKED);
+                    return task;
                 });
     }
 }

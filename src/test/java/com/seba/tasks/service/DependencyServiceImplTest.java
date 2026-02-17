@@ -1,6 +1,7 @@
 package com.seba.tasks.service;
 
 import com.seba.tasks.error.exceptions.CircularDependencyException;
+import com.seba.tasks.error.exceptions.DependencyNotFoundException;
 import com.seba.tasks.error.exceptions.InvalidArgumentException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
@@ -146,6 +147,57 @@ class DependencyServiceImplTest {
                 .verify();
     }
 
+    @Test
+    void removeDependency_existingDependency_removesAndRecalculatesStatus() {
+        UUID taskId = UUID.randomUUID();
+        UUID blockerId = UUID.randomUUID();
+        Task task = buildTestTask(taskId, "Task A", TaskStatus.BLOCKED);
+        task.setDependsOn(new ArrayList<>(List.of(blockerId)));
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(dependencyService.removeDependency(taskId, blockerId))
+                .expectNextMatches(dto ->
+                        dto.dependsOn().isEmpty()
+                                && dto.status() == TaskStatus.TODO)
+                .verifyComplete();
+    }
+
+    @Test
+    void removeDependency_otherBlockersRemain_staysBlocked() {
+        UUID taskId = UUID.randomUUID();
+        UUID blockerId1 = UUID.randomUUID();
+        UUID blockerId2 = UUID.randomUUID();
+        Task task = buildTestTask(taskId, "Task A", TaskStatus.BLOCKED);
+        task.setDependsOn(new ArrayList<>(List.of(blockerId1, blockerId2)));
+
+        Task blocker2 = buildTestTask(blockerId2, "Blocker 2", TaskStatus.TODO);
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(task));
+        when(taskRepository.findByTaskId(blockerId2)).thenReturn(Mono.just(blocker2));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(dependencyService.removeDependency(taskId, blockerId1))
+                .expectNextMatches(dto ->
+                        dto.dependsOn().size() == 1
+                                && !dto.dependsOn().contains(blockerId1)
+                                && dto.status() == TaskStatus.BLOCKED)
+                .verifyComplete();
+    }
+
+    @Test
+    void removeDependency_notDependent_throwsDependencyNotFoundException() {
+        UUID taskId = UUID.randomUUID();
+        UUID blockerId = UUID.randomUUID();
+        Task task = buildTestTask(taskId, "Task A", TaskStatus.TODO);
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(task));
+
+        StepVerifier.create(dependencyService.removeDependency(taskId, blockerId))
+                .expectError(DependencyNotFoundException.class)
+                .verify();
+    }
     // --- helper ---
 
     private static Task buildTestTask(UUID taskId, String title, TaskStatus status) {
