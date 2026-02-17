@@ -124,6 +124,8 @@ class TaskServiceImplTest {
                         && dto.updatedBy().equals("seba")
                         && dto.updatedAt() != null)
                 .verifyComplete();
+
+        verify(dependencyService, never()).unblockDependents(any());
     }
 
     @Test

@@ -250,6 +250,19 @@ class DependencyServiceImplTest {
         verify(taskRepository, never()).save(any());
     }
 
+    @Test
+    void unblockDependents_noDependents_completesWithoutSaving() {
+        UUID completedId = UUID.randomUUID();
+
+        when(taskRepository.findByDependsOnContaining(completedId))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(dependencyService.unblockDependents(completedId))
+                .verifyComplete();
+
+        verify(taskRepository, never()).save(any());
+    }
+
     // --- helper ---
 
     private static Task buildTestTask(UUID taskId, String title, TaskStatus status) {

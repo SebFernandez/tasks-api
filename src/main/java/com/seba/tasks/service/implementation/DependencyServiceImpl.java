@@ -84,18 +84,9 @@ public class DependencyServiceImpl implements DependencyService {
     public Mono<Void> unblockDependents(UUID completedTaskId) {
         return taskRepository.findByDependsOnContaining(completedTaskId)
                 .filter(task -> task.getStatus() == TaskStatus.BLOCKED)
-                .flatMap(task ->
-                        Flux.fromIterable(task.getDependsOn())
-                                .flatMap(taskRepository::findByTaskId)
-                                .all(blocker -> blocker.getStatus() == TaskStatus.DONE)
-                                .flatMap(allDone -> {
-                                    if (allDone) {
-                                        task.setStatus(TaskStatus.TODO);
-                                        return taskRepository.save(task);
-                                    }
-                                    return Mono.empty();
-                                })
-                )
+                .flatMap(task -> recalculateStatus(task)
+                        .filter(t -> t.getStatus() == TaskStatus.TODO)
+                        .flatMap(taskRepository::save))
                 .then();
     }
 
