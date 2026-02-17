@@ -1,6 +1,5 @@
 package com.seba.tasks.service;
 
-import com.seba.tasks.dto.TaskDto;
 import com.seba.tasks.error.exceptions.TaskBlockedException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
