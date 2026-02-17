@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -16,6 +17,7 @@ public class Task {
     private UUID taskId;
     private String title;
     private TaskStatus status;
+    private List<UUID> dependsOn = List.of();
     private Instant createdAt;
     private String createdBy;
     private Instant updatedAt;

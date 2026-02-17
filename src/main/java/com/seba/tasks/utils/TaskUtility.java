@@ -12,6 +12,7 @@ public class TaskUtility {
                 task.getTaskId(),
                 task.getTitle(),
                 task.getStatus(),
+                task.getDependsOn(),
                 task.getCreatedAt(),
                 task.getCreatedBy(),
                 task.getUpdatedAt(),
