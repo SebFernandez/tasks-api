@@ -102,6 +102,7 @@ class DependencyServiceImplTest {
         UUID blockerId = UUID.randomUUID();
 
         when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.empty());
+        when(taskRepository.findByTaskId(blockerId)).thenReturn(Mono.empty());
 
         StepVerifier.create(dependencyService.addDependency(taskId, blockerId))
                 .expectError(TaskNotFoundException.class)
