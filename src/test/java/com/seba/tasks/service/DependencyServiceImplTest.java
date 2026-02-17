@@ -1,5 +1,6 @@
 package com.seba.tasks.service;
 
+import com.seba.tasks.error.exceptions.CircularDependencyException;
 import com.seba.tasks.error.exceptions.InvalidArgumentException;
 import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
@@ -103,6 +104,45 @@ class DependencyServiceImplTest {
 
         StepVerifier.create(dependencyService.addDependency(taskId, blockerId))
                 .expectError(TaskNotFoundException.class)
+                .verify();
+    }
+
+    @Test
+    void addDependency_directCycle_throwsCircularDependencyException() {
+        UUID taskIdA = UUID.randomUUID();
+        UUID taskIdB = UUID.randomUUID();
+        Task taskA = buildTestTask(taskIdA, "Task A", TaskStatus.BLOCKED);
+        taskA.setDependsOn(new ArrayList<>(List.of(taskIdB)));
+        Task taskB = buildTestTask(taskIdB, "Task B", TaskStatus.TODO);
+
+        when(taskRepository.findByTaskId(taskIdB)).thenReturn(Mono.just(taskB));
+        when(taskRepository.findByTaskId(taskIdA)).thenReturn(Mono.just(taskA));
+
+        StepVerifier.create(dependencyService.addDependency(taskIdB, taskIdA))
+                .expectError(CircularDependencyException.class)
+                .verify();
+    }
+
+    @Test
+    void addDependency_transitiveCycle_throwsCircularDependencyException() {
+        UUID taskIdA = UUID.randomUUID();
+        UUID taskIdB = UUID.randomUUID();
+        UUID taskIdC = UUID.randomUUID();
+
+        Task taskA = buildTestTask(taskIdA, "Task A", TaskStatus.BLOCKED);
+        taskA.setDependsOn(new ArrayList<>(List.of(taskIdB)));
+
+        Task taskB = buildTestTask(taskIdB, "Task B", TaskStatus.BLOCKED);
+        taskB.setDependsOn(new ArrayList<>(List.of(taskIdC)));
+
+        Task taskC = buildTestTask(taskIdC, "Task C", TaskStatus.TODO);
+
+        when(taskRepository.findByTaskId(taskIdC)).thenReturn(Mono.just(taskC));
+        when(taskRepository.findByTaskId(taskIdA)).thenReturn(Mono.just(taskA));
+        when(taskRepository.findByTaskId(taskIdB)).thenReturn(Mono.just(taskB));
+
+        StepVerifier.create(dependencyService.addDependency(taskIdC, taskIdA))
+                .expectError(CircularDependencyException.class)
                 .verify();
     }
 
