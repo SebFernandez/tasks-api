@@ -80,6 +80,25 @@ public class DependencyServiceImpl implements DependencyService {
                 });
     }
 
+    @Override
+    public Mono<Void> unblockDependents(UUID completedTaskId) {
+        return taskRepository.findByDependsOnContaining(completedTaskId)
+                .filter(task -> task.getStatus() == TaskStatus.BLOCKED)
+                .flatMap(task ->
+                        Flux.fromIterable(task.getDependsOn())
+                                .flatMap(taskRepository::findByTaskId)
+                                .all(blocker -> blocker.getStatus() == TaskStatus.DONE)
+                                .flatMap(allDone -> {
+                                    if (allDone) {
+                                        task.setStatus(TaskStatus.TODO);
+                                        return taskRepository.save(task);
+                                    }
+                                    return Mono.empty();
+                                })
+                )
+                .then();
+    }
+
     private Mono<Void> detectCycle(UUID taskId, UUID blockerTaskId) {
         return walkDependencies(blockerTaskId, taskId, new HashSet<>());
     }

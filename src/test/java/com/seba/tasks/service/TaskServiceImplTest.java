@@ -27,6 +27,9 @@ class TaskServiceImplTest {
     @Mock
     private TaskRepository taskRepository;
 
+    @Mock
+    private DependencyService dependencyService;
+
     @InjectMocks
     private TaskServiceImpl taskService;
 
@@ -146,6 +149,7 @@ class TaskServiceImplTest {
 
         when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(existing));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(dependencyService.unblockDependents(taskId)).thenReturn(Mono.empty());
 
         StepVerifier.create(taskService.update(taskId, null, TaskStatus.DONE, "seba"))
                 .expectNextMatches(dto ->
@@ -222,6 +226,24 @@ class TaskServiceImplTest {
                         dto.title().equals("New title")
                                 && dto.status() == TaskStatus.BLOCKED)
                 .verifyComplete();
+    }
+
+    // --- cascade unblock ---
+
+    @Test
+    void update_statusToDone_triggersUnblockDependents() {
+        UUID taskId = UUID.randomUUID();
+        Task existing = buildTestTask(taskId, "Task");
+
+        when(taskRepository.findByTaskId(taskId)).thenReturn(Mono.just(existing));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(dependencyService.unblockDependents(taskId)).thenReturn(Mono.empty());
+
+        StepVerifier.create(taskService.update(taskId, null, TaskStatus.DONE, "seba"))
+                .expectNextMatches(dto -> dto.status() == TaskStatus.DONE)
+                .verifyComplete();
+
+        verify(dependencyService).unblockDependents(taskId);
     }
 
     // --- helper ---

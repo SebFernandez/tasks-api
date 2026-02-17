@@ -6,6 +6,7 @@ import com.seba.tasks.error.exceptions.TaskNotFoundException;
 import com.seba.tasks.model.Task;
 import com.seba.tasks.model.TaskStatus;
 import com.seba.tasks.repository.TaskRepository;
+import com.seba.tasks.service.DependencyService;
 import com.seba.tasks.service.TaskService;
 import com.seba.tasks.utils.TaskUtility;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import static com.seba.tasks.error.ErrorCode.TASK_NOT_FOUND;
 public final class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
+    private final DependencyService dependencyService;
 
     @Override
     public Mono<TaskDto> create(String title, String createdBy) {
@@ -57,6 +59,13 @@ public final class TaskServiceImpl implements TaskService {
                     task.setUpdatedAt(Instant.now());
                     task.setUpdatedBy(updatedBy);
                     return taskRepository.save(task)
+                            .flatMap(saved -> {
+                                if (status == TaskStatus.DONE) {
+                                    return dependencyService.unblockDependents(taskId)
+                                            .thenReturn(saved);
+                                }
+                                return Mono.just(saved);
+                            })
                             .map(TaskUtility::toTaskDto);
                 });
     }

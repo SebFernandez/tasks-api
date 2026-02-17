@@ -10,4 +10,6 @@ public interface DependencyService {
     Mono<TaskDto> addDependency(UUID taskId, UUID blockerTaskId);
 
     Mono<TaskDto> removeDependency(UUID taskId, UUID blockerTaskId);
+
+    Mono<Void> unblockDependents(UUID completedTaskId);
 }

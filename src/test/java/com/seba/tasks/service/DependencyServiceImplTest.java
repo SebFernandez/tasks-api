@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -22,7 +23,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DependencyServiceImplTest {
@@ -199,6 +201,55 @@ class DependencyServiceImplTest {
                 .expectError(DependencyNotFoundException.class)
                 .verify();
     }
+    // --- unblockDependents ---
+
+    @Test
+    void unblockDependents_allBlockersDone_movesToTodo() {
+        UUID completedId = UUID.randomUUID();
+        UUID dependentId = UUID.randomUUID();
+
+        Task dependent = buildTestTask(dependentId, "Dependent", TaskStatus.BLOCKED);
+        dependent.setDependsOn(new ArrayList<>(List.of(completedId)));
+
+        Task completed = buildTestTask(completedId, "Completed", TaskStatus.DONE);
+
+        when(taskRepository.findByDependsOnContaining(completedId))
+                .thenReturn(Flux.just(dependent));
+        when(taskRepository.findByTaskId(completedId)).thenReturn(Mono.just(completed));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(dependencyService.unblockDependents(completedId))
+                .verifyComplete();
+
+        verify(taskRepository).save(argThat(task ->
+                task.getTaskId().equals(dependentId)
+                && task.getStatus() == TaskStatus.TODO));
+    }
+
+    @Test
+    void unblockDependents_someBlockersNotDone_staysBlocked() {
+        UUID completedId = UUID.randomUUID();
+        UUID otherBlockerId = UUID.randomUUID();
+        UUID dependentId = UUID.randomUUID();
+
+        Task dependent = buildTestTask(dependentId, "Dependent", TaskStatus.BLOCKED);
+        dependent.setDependsOn(new ArrayList<>(List.of(completedId, otherBlockerId)));
+
+        Task otherBlocker = buildTestTask(otherBlockerId, "Other", TaskStatus.IN_PROGRESS);
+
+        when(taskRepository.findByDependsOnContaining(completedId))
+                .thenReturn(Flux.just(dependent));
+        when(taskRepository.findByTaskId(completedId))
+                .thenReturn(Mono.just(buildTestTask(completedId, "Completed", TaskStatus.DONE)));
+        when(taskRepository.findByTaskId(otherBlockerId))
+                .thenReturn(Mono.just(otherBlocker));
+
+        StepVerifier.create(dependencyService.unblockDependents(completedId))
+                .verifyComplete();
+
+        verify(taskRepository, never()).save(any());
+    }
+
     // --- helper ---
 
     private static Task buildTestTask(UUID taskId, String title, TaskStatus status) {
